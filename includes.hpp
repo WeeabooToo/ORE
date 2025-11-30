@@ -17,6 +17,7 @@
 #include <thread>
 #include <bitset>
 #include <mutex>
+#include <atomic>
 #include <array>
 #include <dwmapi.h>
 
@@ -207,8 +208,8 @@ namespace OW {
 	const char* keys3 = (u8"LEFT");
 	const char* key_type3[] = { (u8"LEFT"), (u8"RIGHT"),  (u8"Shift"),  (u8"E"),(u8"Q") };
 
-	const char* espop = (u8"关闭");
-	const char* espop_type[] = { (u8"关闭"), (u8"轮廓"),  (u8"模型"),  (u8"掩耳盗铃模式") };
+	const char* espop = (u8"乇");
+	const char* espop_type[] = { (u8"乇"), (u8""),  (u8"模"),  (u8"诙模式") };
 
 	struct espBone {
 		bool boneerror = false;
@@ -638,6 +639,25 @@ namespace OW {
 	inline std::vector<std::pair<uint64_t, uint64_t>>ow_entities_scan = {};
 	inline std::vector<c_entity> entities = {};
 	inline std::vector<hpanddy> hp_dy_entities{};
+	inline std::mutex entities_mutex;
+
+	inline std::vector<std::pair<uint64_t, uint64_t>> get_ow_entities_snapshot()
+	{
+		std::lock_guard<std::mutex> lock(entities_mutex);
+		return ow_entities;
+	}
+
+	inline std::vector<c_entity> get_entities_snapshot()
+	{
+		std::lock_guard<std::mutex> lock(entities_mutex);
+		return entities;
+	}
+
+	inline std::vector<hpanddy> get_hp_dy_entities_snapshot()
+	{
+		std::lock_guard<std::mutex> lock(entities_mutex);
+		return hp_dy_entities;
+	}
 	inline c_entity local_entity = {};
 	inline UINT g_Width = {}, g_Height = {};
 

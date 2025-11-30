@@ -12,13 +12,13 @@ namespace OW {
 	}
 
 	unsigned int convertToHex(ImVec4 color) {
-		// ½«Ã¿¸ö·ÖÁ¿´Ó[0.0, 1.0]Ó³Éäµ½[0, 255]·¶Î§£¬²¢×ª»»ÎªÕûÊı
+		// Ã¿[0.0, 1.0]Ó³äµ½[0, 255]Î§×ªÎª
 		unsigned int red = static_cast<unsigned int>(color.x * 255);
 		unsigned int green = static_cast<unsigned int>(color.y * 255);
 		unsigned int blue = static_cast<unsigned int>(color.z * 255);
 		unsigned int alpha = static_cast<unsigned int>(color.w * 255);
 
-		// ½«RGBA·ÖÁ¿×éºÏ³ÉÒ»¸ö32Î»ÕûÊı£¬¸ñÊ½Îª0xAARRGGBB
+		// RGBAÏ³Ò»32Î»Ê½Îª0xAARRGGBB
 		unsigned int hexColor = (alpha << 24) | (blue << 16) | (green << 8) | red;
 
 		return hexColor;
@@ -30,21 +30,21 @@ namespace OW {
 	}
 
 	/*inline float CalculateTrackBack(Vector3 rayOrigin, Vector3 OwnPos, Vector3 LocalAngle, Vector3 rayDirection) {
-		// ¼ÆËãÆ½Ãæ·¨ÏòÁ¿µÄÄ£
+		// Æ½æ·¨Ä£
 		float rayDirectionLength = std::sqrt(rayDirection.X * rayDirection.X +
 			rayDirection.Y * rayDirection.Y +
 			rayDirection.Z * rayDirection.Z);
 
-		// È·±£ÉäÏß·½ÏòÏòÁ¿µÄ³¤¶È²»ÎªÁã
+		// È·ß·Ä³È²Îª
 		if (rayDirectionLength > 1e-6) {
-			// ¼ÆËãµãrayOriginµ½Æ½ÃæµÄÓĞÏò¾àÀë
+			// rayOriginÆ½
 			float distance = ((rayOrigin.X - OwnPos.X) * rayDirection.X +
 				(rayOrigin.Y - OwnPos.Y) * rayDirection.Y +
 				(rayOrigin.Z - OwnPos.Z) * rayDirection.Z) / rayDirectionLength;
 			return distance/((rayDirection.X * rayDirection.X)+ (rayDirection.Y * rayDirection.Y)+ (rayDirection.Z * rayDirection.Z));
 		}
 
-		return 0; // Èç¹ûÉäÏß·½ÏòÏòÁ¿µÄ³¤¶ÈÎªÁã£¬·µ»Ø0±íÊ¾¾àÀëÎŞÇîÔ¶
+		return 0; // ß·Ä³Îªã£¬0Ê¾Ô¶
 	}*/
 
 
@@ -298,7 +298,7 @@ namespace OW {
 			for (uint32_t i = 0x0; i < SkillSize; i++)
 			{
 				if (SDK->RPM<uint16_t>(SkillRawList + (i * 0x80)) == a1)
-					if (SDK->RPM<float>(SkillRawList + (i * 0x80) + 0x30) >= 0.5f) // 50% ÀÌ»ó Â÷Â¡ ½Ã 
+					if (SDK->RPM<float>(SkillRawList + (i * 0x80) + 0x30) >= 0.5f) // 50% Ì» Â¡  
 						return SDK->RPM<float>(SkillRawList + (i * 0x80) + 0x30);
 			}
 		}
@@ -312,6 +312,9 @@ namespace OW {
 		int TarGetIndex = -1;
 		Vector3 target{};
 		Vector2 CrossHair = Vector2(GetSystemMetrics(SM_CXSCREEN) / 2.0f, GetSystemMetrics(SM_CYSCREEN) / 2.0f);
+
+		auto entities = get_entities_snapshot();
+		auto hp_dy_entities = get_hp_dy_entities_snapshot();
 
 		float origin = 100000.f;
 		float dist = 100000.f;
@@ -690,6 +693,9 @@ namespace OW {
 		Vector3 target{};
 		if (local_entity.HeroID == eHero::HERO_HANJO) predit = true;
 		Vector2 CrossHair = Vector2(GetSystemMetrics(SM_CXSCREEN) / 2.0f, GetSystemMetrics(SM_CYSCREEN) / 2.0f);
+
+		auto entities = get_entities_snapshot();
+		auto hp_dy_entities = get_hp_dy_entities_snapshot();
 
 		float origin = 100000.f;
 		if (entities.size() > 0) {

@@ -25,72 +25,75 @@ time_t nowtime;
 
 float WX, WY;
 
-std::mutex mutex;
-
 namespace OW {
 
 
-	inline void configsavenloadthread();
-	inline void aimbot_thread();
-	int abletotread=0;
-	int howbigentitysize;
-	inline void entity_scan_thread() {
-		while (Config::doingentity == 1) {
-			if (abletotread == 0) {
-				ow_entities_scan = get_ow_entities();
-				abletotread = 1;
-			}
-			Sleep(10);
-		}
-	}
+        inline void configsavenloadthread();
+        inline void aimbot_thread();
+        std::atomic<int> abletotread{0};
+        int howbigentitysize;
+        inline void entity_scan_thread() {
+                while (Config::doingentity == 1) {
+                        if (abletotread.load() == 0) {
+                                auto scanned_entities = get_ow_entities();
+                                {
+                                        std::lock_guard<std::mutex> lock(entities_mutex);
+                                        ow_entities_scan = scanned_entities;
+                                }
+                                abletotread.store(1);
+                        }
+                        Sleep(10);
+                }
+        }
 
 	int entitytime = 0;
 	int jumpentity = 0;
 	Vector3 lastpos = { 0, 0, 0 };
 	inline void entity_thread() {
-		while (Config::doingentity == 1) {
-			if (entitytime == 0) entitytime = GetTickCount();
-			if (GetTickCount() - entitytime >= 100 && abletotread)
-			{
-				mutex.lock();
-				ow_entities = ow_entities_scan;
-				abletotread = 0;
-				entitytime = GetTickCount();
-				mutex.unlock();
-			}
-			/*if (!(ow_entities.size() > 0)) {
-				mutex.lock();
-				abletotread = 0;
-				mutex.unlock();
-				//entities = {};
-				//local_entity.AngleBase=0;
-				//entitytime = GetTickCount();
-				Sleep(2000);
-				continue;
-			}*/
-			if (!(ow_entities.size() > 0)) {
-				mutex.lock();
-				//abletotread = 0;
-				entities = {};
-				hp_dy_entities = {};
-				mutex.unlock();
-				//entities = {};
-				//local_entity.AngleBase=0;
-				//entitytime = GetTickCount();
-				Sleep(1000);
-				continue;
-			}
-			//mutex.unlock();
-			std::vector<c_entity> tmp_entities{};
-			std::vector<hpanddy> hpdy_entities{};
-			//int howbigentitysize = ow_entities.size();
-			//if (howbigentitysize > 30) howbigentitysize = 30;
-			c_entity lastentity{};
-			for (int i = 0; i < ow_entities.size(); i++) {
+                while (Config::doingentity == 1) {
+                        if (entitytime == 0) entitytime = GetTickCount();
+                        if (GetTickCount() - entitytime >= 100 && abletotread.load())
+                        {
+                                {
+                                        std::lock_guard<std::mutex> lock(entities_mutex);
+                                        ow_entities = ow_entities_scan;
+                                }
+                                abletotread.store(0);
+                                entitytime = GetTickCount();
+                        }
+                        /*if (!(ow_entities_local.size() > 0)) {
+                                mutex.lock();
+                                                                abletotread.store(0);
+                                mutex.unlock();
+                                //entities = {};
+                                //local_entity.AngleBase=0;
+                                //entitytime = GetTickCount();
+                                Sleep(2000);
+                                continue;
+                        }*/
+                        auto ow_entities_local = get_ow_entities_snapshot();
+                        if (ow_entities_local.empty()) {
+                                std::lock_guard<std::mutex> lock(entities_mutex);
+                                //abletotread = 0;
+                                entities.clear();
+                                hp_dy_entities.clear();
+                                //entities = {};
+                                //local_entity.AngleBase=0;
+                                //entitytime = GetTickCount();
+                                Sleep(1000);
+                                continue;
+                        }
+                        //mutex.unlock();
+                        std::vector<c_entity> tmp_entities{};
+                        std::vector<hpanddy> hpdy_entities{};
+                        //int howbigentitysize = ow_entities_local.size();
+                        //if (howbigentitysize > 30) howbigentitysize = 30;
+c_entity lastentity{};
+			for (size_t i = 0; i < ow_entities_local.size(); i++) {
 				c_entity entity{};
-				if (!ow_entities[i].first || !ow_entities[i].second) continue;
-				if (i > ow_entities.size()) continue;
-				const auto& [ComponentParent, LinkParent] = ow_entities[i];//注意这里的&
+				if (!ow_entities_local[i].first || !ow_entities_local[i].second) continue;
+				if (i > ow_entities_local.size()) continue;
+				const auto& [ComponentParent, LinkParent] = ow_entities_local[i];//注意这里的&
 				entity.address = ComponentParent;
 				if (!entity.address) continue;
 				if (!LinkParent) continue;
@@ -263,7 +266,7 @@ namespace OW {
 					//if (entity.skill1act|| entity.skill2act) std::cout << 1 << std::endl;
 					//if (IsSkillActive(entity.SkillBase, 0, 0x4BF))std::cout<<1<<std::endl;
 					//else {} //std::cout << 0 << std::endl;
-					//std::cout << ow_entities.size() << std::endl;
+					//std::cout << ow_entities_local.size() << std::endl;
 				}
 
 				if (entity.OutlineBase)
@@ -375,8 +378,11 @@ namespace OW {
 			}
 			//entities = tmp_entities;
 			//mutex.lock();
-			entities = tmp_entities;
-			hp_dy_entities = hpdy_entities;
+			{
+				std::lock_guard<std::mutex> lock(entities_mutex);
+				entities = tmp_entities;
+				hp_dy_entities = hpdy_entities;
+			}
 			//mutex.unlock();
 			Sleep(3);
 			//Sleep(5);
@@ -418,6 +424,7 @@ namespace OW {
 	}
 
 	inline void PlayerInfo() {
+                auto entities = get_entities_snapshot();
 		if (entities.size() > 0) {
 			//mutex.lock();
 			//for (const c_entity &entity : entities)//传常量引用
@@ -468,6 +475,7 @@ namespace OW {
 	}
 
 	inline void skillinfo() {
+                auto entities = get_entities_snapshot();
 		if (entities.size() > 0) {
 			//mutex.lock();
 			int i = 10;
@@ -535,6 +543,7 @@ namespace OW {
 
 
 	inline void Draw_Skel() {
+                auto entities = get_entities_snapshot();
 		if (entities.size() > 0) {
 			//mutex.lock();
 			for (c_entity entity : entities) {
@@ -604,6 +613,8 @@ namespace OW {
 		}
 	}
 	inline void draw3dbox() {
+
+                        auto entities = get_entities_snapshot();
 		
 			if (entities.size() > 0)
 			{
@@ -665,6 +676,7 @@ namespace OW {
 	}
 
 	inline void drawline() {
+                        auto entities = get_entities_snapshot();
 		if (entities.size() > 0)
 		{
 			//mutex.lock();
@@ -688,6 +700,8 @@ namespace OW {
 	}
 
 	/*inline void esp() {
+                auto hp_dy_entities = get_hp_dy_entities_snapshot();
+                auto entities = get_entities_snapshot();
 		__try
 		{
 			ImDrawList* Draw = ImGui::GetBackgroundDrawList();
@@ -2421,6 +2435,7 @@ namespace OW {
 			Vector2 CrossHair = Vector2(GetSystemMetrics(SM_CXSCREEN) / 2.0f, GetSystemMetrics(SM_CYSCREEN) / 2.0f);
 			static float origin_sens = 0.f;
 			while (true) {
+				auto entities = get_entities_snapshot();
 				if (entities.size() > 0) {
 					//std::cout<<SDK->RPM<float>(GetSenstivePTR())<< std::endl;
 					//std::cout << GetSenstivePTR() << std::endl;
@@ -2474,8 +2489,8 @@ namespace OW {
 									else Target.Z -= (double)(rand()) / RAND_MAX / 500;
 									if (Config::minFov1 > 500)Config::minFov1 = 500;
 									if (Config::Fov > 500)Config::Fov = 500;
-									if (Config::minFov2 > 500)Config::minFov1 = 500;
-									if (Config::Fov2 > 500)Config::Fov = 500;
+									if (Config::minFov2 > 500)Config::minFov2 = 500;
+									if (Config::Fov2 > 500)Config::Fov2 = 500;
 									if (Config::fov360) Config::fov360 = false;
 								}
 								if (Target != Vector3(0, 0, 0)) {
@@ -2594,8 +2609,8 @@ namespace OW {
 									else Target.Z -= (double)(rand()) / RAND_MAX / 300;
 									if (Config::minFov1 > 500)Config::minFov1 = 500;
 									if (Config::Fov > 500)Config::Fov = 500;
-									if (Config::minFov2 > 500)Config::minFov1 = 500;
-									if (Config::Fov2 > 500)Config::Fov = 500;
+									if (Config::minFov2 > 500)Config::minFov2 = 500;
+									if (Config::Fov2 > 500)Config::Fov2 = 500;
 									if (Config::fov360) Config::fov360 = false;
 								}
 								if (Target != Vector3(0, 0, 0)) {
@@ -2752,8 +2767,8 @@ namespace OW {
 									else Target.Z -= (double)(rand()) / RAND_MAX / 300;
 									if (Config::minFov1 > 500)Config::minFov1 = 500;
 									if (Config::Fov > 500)Config::Fov = 500;
-									if (Config::minFov2 > 500)Config::minFov1 = 500;
-									if (Config::Fov2 > 500)Config::Fov = 500;
+									if (Config::minFov2 > 500)Config::minFov2 = 500;
+									if (Config::Fov2 > 500)Config::Fov2 = 500;
 									if (Config::fov360) Config::fov360 = false;
 								}
 								if (Target != Vector3(0, 0, 0)) {
@@ -3250,8 +3265,8 @@ namespace OW {
 										else Target.Z -= (double)(rand()) / RAND_MAX / 300;
 										if (Config::minFov1 > 500)Config::minFov1 = 500;
 										if (Config::Fov > 500)Config::Fov = 500;
-										if (Config::minFov2 > 500)Config::minFov1 = 500;
-										if (Config::Fov2 > 500)Config::Fov = 500;
+										if (Config::minFov2 > 500)Config::minFov2 = 500;
+										if (Config::Fov2 > 500)Config::Fov2 = 500;
 										if (Config::fov360) Config::fov360 = false;
 									}
 									else if (Config::Tracking2) {
@@ -3267,8 +3282,8 @@ namespace OW {
 										else Target.Z -= (double)(rand()) / RAND_MAX / 500;
 										if (Config::minFov1 > 500)Config::minFov1 = 500;
 										if (Config::Fov > 500)Config::Fov = 500;
-										if (Config::minFov2 > 500)Config::minFov1 = 500;
-										if (Config::Fov2 > 500)Config::Fov = 500;
+										if (Config::minFov2 > 500)Config::minFov2 = 500;
+										if (Config::Fov2 > 500)Config::Fov2 = 500;
 										if (Config::fov360) Config::fov360 = false;
 									}
 								}
